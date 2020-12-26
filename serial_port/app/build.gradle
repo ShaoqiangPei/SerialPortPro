@@ -1,0 +1,112 @@
+apply plugin: 'com.android.application'
+
+//android配置  
+def config = rootProject.ext.android
+//相关库依赖  
+def librarys = rootProject.ext.supportDependencies
+
+android {
+    compileSdkVersion config.compileSdkVersion
+    buildToolsVersion config.buildToolsVersion
+    defaultConfig {
+        applicationId config.applicationId
+        minSdkVersion config.minSdkVersion
+        targetSdkVersion config.targetSdkVersion
+        versionCode config.versionCode
+        versionName config.versionName
+        testInstrumentationRunner config.testInstrumentationRunner
+
+        externalNativeBuild {
+            cmake {
+                cppFlags ""
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    //NDK配置
+    splits {
+        abi {
+            enable true
+            reset()
+            include 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a' //select ABIs to build APKs for
+            universalApk true //generate an additional APK that contains all the ABIs
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+//            path "src/main/cpp/CMakeLists.txt"
+            path "CMakeLists.txt"
+            version "3.10.2"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility 1.8
+        targetCompatibility 1.8
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation librarys.implementation_support_appcompat
+    implementation librarys.implementation_constraint_layout
+    testImplementation librarys.testImplementation_test_junit
+    androidTestImplementation librarys.androidTestImplementation_test_ext_junit
+    androidTestImplementation librarys.androidTestImplementation_support_espresso
+}
+
+
+//设置时间格式
+static def releaseTime() {
+    return new Date().format("yyyyMMddHHmm", TimeZone.getDefault())
+}
+
+//删除 旧的.jar包 任务
+task clearJar(type: Delete) {
+    FileTree tree = fileTree("build/jars/")
+    tree.visit {
+        element ->
+            if (element.getName().endsWith(".jar")) {
+                println "$element.file.name" + " " + element.getName()
+                delete element.file
+            }
+    }
+}
+
+
+//创建 jar 包
+task makeJar(type: Jar){
+    //指定生成的jar名
+    baseName = "test"
+//    appendix = "v"
+    version = "1.0.0"+"_"+releaseTime()
+//    classifier = "release"
+    // 后缀名
+    extension = "jar"
+//    //最终的 jar 包名，如果没设置，默认为 [baseName]-[appendix]-[version]-[classifier].[extension]
+//    archiveName = "test.jar"
+
+    //从哪里打包class文件
+    from('build/intermediates/javac/debug/classes/com/serialportproj/serial/')
+
+//    //kotlin 编译后的 class 文件
+//    from('build/tmp/kotlin-classes/debug/')
+    //打包到jar后的目录结构
+    into('com/serialportproj/serial/')
+    //去掉不需要打包的目录和文件
+    exclude('BuildConfig.class','R.class')
+    //去掉R$开头的文件
+    exclude{it.name.startsWith('R$')}
+    //jar 的输出路径，默认输出在 build/libs 目录下
+    destinationDir = file('build/jars/')
+}
+
+//执行 makeJar 时,会先执行 clearJar,再执行build,最后执行 makeJar,保证获取最新的编译文件
+makeJar.dependsOn(clearJar,build)
